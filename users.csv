@@ -1,4 +1,13 @@
 username,password,role,max_requests_per_day,max_tokens_per_day
-student,letmein,student,500,1000000
+team1,Logistics,student,200,500000
+team2,Procurement,student,200,500000
+team3,Inventory,student,200,500000
+team4,Distribution,student,200,500000
+team5,Warehousing,student,200,500000
+team6,Forecasting,student,200,500000
+team7,Time,student,200,500000
+team8,Supplier,student,200,500000
+team9,Planning,student,200,500000
+team10,Fulfillment,student,200,500000
 instructor,teach123,admin,99999,1000000
 
