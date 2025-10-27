@@ -3,23 +3,13 @@ from openai import OpenAI
 
 
 # Show title and description.
-st.title("💬 Chatbot")
+st.title("🎓 SUTD ESD SCDD Classroom GPT Portal")
 st.write(
     "This is a simple chatbot that uses OpenAI's GPT-5 model to generate responses. "
     "This chatbot is purely for the students of 40.318 SCDD 2025 at ESD, SUTD. "
     "Please only use this app for the ESD Supply Chain Game."
 )
 
-"""
-Streamlit Classroom Chat (OpenAI API, per-student quotas)
----------------------------------------------------------
-Quick start:
-1) pip install -r requirements.txt
-2) Set environment variable OPENAI_API_KEY
-3) streamlit run app.py
-
-⚠️ Classroom demo security only. Use behind campus SSO if possible.
-"""
 
 import os
 import sqlite3
@@ -32,7 +22,7 @@ except Exception:
     st.error("OpenAI SDK not found. Run: pip install openai")
     raise
 
-APP_TITLE = "🎓 Classroom GPT Portal"
+APP_TITLE = "" #🎓 Classroom GPT Portal
 DB_PATH = "usage.db"
 USERS_CSV = "users.csv"
 
@@ -94,8 +84,7 @@ def load_users():
         with open(USERS_CSV, "w", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
             w.writerow(["username","password","role","max_requests_per_day","max_tokens_per_day"])
-            w.writerow(["alice","alice123","student",25,20000])
-            w.writerow(["bob","bob123","student",25,20000])
+            w.writerow(["student","letmein","student",25,20000])
             w.writerow(["instructor","teach123","admin",99999,1000000])
     with open(USERS_CSV, "r", newline="", encoding="utf-8") as f:
         r = csv.DictReader(f)
@@ -173,13 +162,19 @@ def login(users):
 
 def logout():
     if st.sidebar.button("Sign out"):
-        for k in ("user","role","chat"):
-            if k in st.session_state:
-                del st.session_state[k]
-        st.success("Signed out.")
+        for k in ("user", "role", "chat"):
+            st.session_state.pop(k, None)
+        # st.success("Signed out.")  # optional; will disappear on rerun anyway
+        st.rerun()
+
 
 # ---------- Chat Page ----------
 def page_chat(client, users, conn):
+    # Early guard: if not logged in, stop rendering this page
+    user = st.session_state.get("user")
+    if not user:
+        st.stop()
+
     st.header("Chat")
     user = st.session_state["user"]
     today_str = dt.date.today().isoformat()
@@ -192,8 +187,7 @@ def page_chat(client, users, conn):
         st.session_state["user_msg"] = ""
     if "sys_msg" not in st.session_state:
         st.session_state["sys_msg"] = (
-            "You are a helpful AI teaching assistant. "
-            "Be concise, numeric, and specific when appropriate."
+            "You are my Supply Chain Review TA. Be concise, numeric, and specific in your analysis."
         )
 
     # ---- Quotas ----
@@ -205,19 +199,39 @@ def page_chat(client, users, conn):
 
     # ---- Controls (model & settings) ----
     with st.expander("Model & Settings", expanded=True):
-        model = st.selectbox("Model", ["gpt-4o", "gpt-5", "gpt-4o-mini"], index=0)
+        # --- Model select: default to GPT-5 on first run, persist thereafter ---
+        MODEL_OPTIONS = ["gpt-5", "gpt-4o", "gpt-4o-mini"]
+        if "model" not in st.session_state:
+            st.session_state.model = "gpt-5"  # default once
 
-        # Define a default once, but don't assign and bind simultaneously
-        default_sys_msg = st.session_state.get(
-            "sys_msg",
-            "You are a helpful AI teaching assistant. Be concise, numeric, and specific when appropriate."
+        model = st.selectbox(
+            "Model",
+            MODEL_OPTIONS,
+            index=MODEL_OPTIONS.index(st.session_state.model) if st.session_state.model in MODEL_OPTIONS else 0,
+            key="model",  # widget owns this key; no 'value=' arg
         )
-        sys_msg = st.text_area(
-            "System prompt (optional)",
-            value=default_sys_msg,
-            height=90,
-            key="sys_msg"  # widget owns this key
+
+        # --- System prompt: initialize BEFORE widget; don't pass 'value=' ---
+        DEFAULT_SYS_MSG = (
+            "You are my Supply Chain Review TA. Be concise, numeric, and specific in your analysis. "  
         )
+        if "sys_msg" not in st.session_state:
+            st.session_state.sys_msg = DEFAULT_SYS_MSG
+
+        # --- Restrict editing: only admin can modify system prompt ---
+        if st.session_state.get("role") == "admin":
+            st.text_area(
+                "System prompt (optional)",
+                key="sys_msg",
+                height=90,
+            )
+        else:
+            st.text_area(
+                "System prompt (view only)",
+                value=st.session_state["sys_msg"],
+                height=90,
+                disabled=True,
+            )
 
         cols = st.columns(3)
         with cols[0]:
@@ -339,10 +353,11 @@ def page_chat(client, users, conn):
             st.stop()
 
     # ---- Clear conversation ----
+    st.divider()  # optional visual separator
     if st.button("Clear conversation"):
         st.session_state["chat"] = []
         st.success("Conversation cleared.")
-        st.experimental_rerun()
+        st.rerun()
 
 
 # ---------- Admin Page ----------
@@ -386,10 +401,16 @@ def main():
     conn = get_db()
     users = load_users()
 
-    user, role = login(users)
+    # Render login controls; they set session_state on success
+    _user_before, _role_before = login(users)
+
+    # Re-check current session state after possible login action
+    user = st.session_state.get("user")
+    role = st.session_state.get("role")
+
     if user:
         st.sidebar.success(f"Signed in as {user} ({role})")
-        logout()
+        logout()  # if clicked, this will st.rerun() and prevent reaching tabs
         tab1, tab2 = st.tabs(["💬 Chat", "🛠️ Admin"])
         with tab1:
             page_chat(client, users, conn)
