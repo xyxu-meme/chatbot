@@ -1,0 +1,4 @@
+username,password,role,max_requests_per_day,max_tokens_per_day
+student,letmein,student,500,1000000
+instructor,teach123,admin,99999,1000000
+
